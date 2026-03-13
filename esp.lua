@@ -1,66 +1,66 @@
 --[[
-    ESP ULTIMATE v2.0
+    ESP + AIMBOT + HUD ULTIMATE
     Recursos:
-    - Box ESP (2D e 3D)
-    - Tracers (linhas do centro da tela até o jogador)
-    - Name ESP (nome do jogador)
-    - Health Bar (barra de vida)
-    - Distance ESP (distância em studs)
-    - Head Dot (ponto na cabeça)
-    - Team Check (diferencia aliados de inimigos)
-    - Configurações personalizáveis
+    - ESP completo (box, nome, vida, distância, tracer, head dot)
+    - Aim Circle (FOV) e aimbot (opcional)
+    - HUD com informações do jogador (saúde, armadura, etc.)
+    - Menu de configuração interativo
+    - Suporte a Drawing (Synapse, Krnl) e fallback para ScreenGui
 ]]
 
--- Carrega a biblioteca de desenho (depende do executor)
-local Drawing = Drawing or not Drawing and loadstring(game:HttpGet("https://rawscripts.net/raw/Filtered-Drawing-Library-for-Synapse-24224"))()
-if not Drawing then
-    warn("Biblioteca Drawing não encontrada. Tentando criar objetos GUI...")
-    -- Fallback para SurfaceGui (caso o executor não suporte Drawing)
-end
-
--- Configurações do ESP
+-- Configurações iniciais (podem ser alteradas pelo menu)
 local Settings = {
     Enabled = true,
-    TeamCheck = true,      -- Aliados = verde, Inimigos = vermelho
+    TeamCheck = true,
     ShowBox = true,
-    ShowTracer = true,
     ShowName = true,
     ShowHealth = true,
     ShowDistance = true,
+    ShowTracer = true,
     ShowHeadDot = true,
-    BoxType = "2D",        -- "2D" ou "3D"
-    TracerPosition = "Bottom", -- "Bottom", "Center", "Top"
-    MaxDistance = 1000,    -- Distância máxima para renderizar
+    ShowHUD = true,
+    AimEnabled = false,
+    AimCircle = true,
+    AimCircleColor = Color3.fromRGB(255, 255, 255),
+    AimCircleRadius = 150,
+    AimSmoothness = 0.5,
+    AimKey = "E",           -- Tecla para ativar aimbot (segurar)
+    BoxType = "2D",
+    TracerPosition = "Bottom",
+    MaxDistance = 1000,
     FontSize = 13,
     Outline = true,
-    UpdateRate = 0.1,      -- Segundos entre atualizações
     Colors = {
         Enemy = Color3.fromRGB(255, 0, 0),
         Team = Color3.fromRGB(0, 255, 0),
         Tracer = Color3.fromRGB(255, 255, 255),
         Text = Color3.fromRGB(255, 255, 255),
-        Outline = Color3.fromRGB(0, 0, 0)
+        Outline = Color3.fromRGB(0, 0, 0),
+        HUD = Color3.fromRGB(0, 150, 255)
     }
 }
 
--- Cache de jogadores
+-- Serviços
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Mouse = LocalPlayer:GetMouse()
 
--- Tabela para armazenar os objetos de desenho
+-- Cache
 local ESPObjects = {}
+local AimCircleObj = nil
+local HUDElements = {}
 
--- Função para criar objetos de desenho (compatível com a maioria dos executores)
+-- Função para criar desenhos (compatível com Drawing ou ScreenGui)
 local function createDrawing(type, properties)
     local obj
     if Drawing then
         obj = Drawing.new(type)
     else
-        -- Fallback: criar ScreenGui (caso o executor não suporte Drawing)
-        -- Isso é menos eficiente, mas funciona em executores básicos
+        -- Fallback ScreenGui
         local gui = Instance.new("ScreenGui")
         gui.Name = "ESP_" .. tostring(math.random(1, 999999))
         gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -71,15 +71,19 @@ local function createDrawing(type, properties)
             obj.BackgroundTransparency = properties.Transparency or 0
             obj.Size = UDim2.new(0, properties.Width or 2, 0, properties.Height or 2)
             obj.Position = UDim2.new(0, properties.X or 0, 0, properties.Y or 0)
+            obj.BorderSizePixel = 0
             obj.Parent = gui
         elseif type == "Text" then
             obj = Instance.new("TextLabel")
             obj.Text = properties.Text or ""
             obj.TextColor3 = properties.Color or Color3.new(1,1,1)
             obj.TextStrokeTransparency = properties.Outline and 0 or 1
+            obj.TextStrokeColor3 = properties.OutlineColor or Color3.new(0,0,0)
             obj.BackgroundTransparency = 1
             obj.Size = UDim2.new(0, properties.Width or 100, 0, properties.Height or 20)
             obj.Position = UDim2.new(0, properties.X or 0, 0, properties.Y or 0)
+            obj.Font = Enum.Font.SourceSans
+            obj.TextSize = properties.Size or 14
             obj.Parent = gui
         elseif type == "Line" then
             obj = Instance.new("Frame")
@@ -87,7 +91,17 @@ local function createDrawing(type, properties)
             obj.Size = UDim2.new(0, properties.Width or 2, 0, properties.Height or 2)
             obj.Position = UDim2.new(0, properties.X or 0, 0, properties.Y or 0)
             obj.Rotation = properties.Rotation or 0
+            obj.BorderSizePixel = 0
             obj.Parent = gui
+        elseif type == "Circle" then
+            -- Círculo via imagem ou frame arredondado
+            obj = Instance.new("ImageLabel")
+            obj.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+            obj.BackgroundTransparency = 1
+            obj.Size = UDim2.new(0, properties.Radius*2 or 20, 0, properties.Radius*2 or 20)
+            obj.Position = UDim2.new(0, properties.X - (properties.Radius or 10), 0, properties.Y - (properties.Radius or 10))
+            obj.Parent = gui
+            -- Infelizmente não há suporte nativo para círculo, mas podemos usar imagem
         end
     end
     
@@ -101,7 +115,20 @@ local function createDrawing(type, properties)
     return obj
 end
 
--- Função para obter a cor baseada no time
+-- Função auxiliar para remover desenhos
+local function removeDrawing(obj)
+    if obj then
+        pcall(function()
+            if obj.Remove then
+                obj:Remove()
+            elseif obj.Destroy then
+                obj:Destroy()
+            end
+        end)
+    end
+end
+
+-- Função para obter cor baseada no time
 local function getPlayerColor(player)
     if Settings.TeamCheck and player.Team and LocalPlayer.Team then
         if player.Team == LocalPlayer.Team then
@@ -111,7 +138,7 @@ local function getPlayerColor(player)
     return Settings.Colors.Enemy
 end
 
--- Função para calcular a distância
+-- Função para calcular distância
 local function getDistance(player)
     if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
         return math.huge
@@ -120,355 +147,502 @@ local function getDistance(player)
     return (Camera.CFrame.Position - root.Position).Magnitude
 end
 
--- Função para desenhar a caixa 2D
-local function drawBox2D(player, color, dist, objects)
-    local char = player.Character
-    if not char then return end
+-- Função para verificar se o jogador é válido
+local function isValidPlayer(player)
+    if player == LocalPlayer then return false end
+    if not player.Character then return false end
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return false end
+    return true
+end
+
+-- Desenhar ESP para um jogador
+local function drawESP(player, dist)
+    if not isValidPlayer(player) then return end
     
+    local color = getPlayerColor(player)
+    local char = player.Character
     local humanoid = char:FindFirstChild("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or not root then return end
     
-    local position = root.Position
-    local size = humanoid.HipHeight * 2 + 3
+    -- Inicializar ou limpar objetos antigos
+    if not ESPObjects[player] then
+        ESPObjects[player] = {}
+    else
+        for _, obj in pairs(ESPObjects[player]) do
+            removeDrawing(obj)
+        end
+    end
+    local objects = {}
+    ESPObjects[player] = objects
     
-    local top, visible = Camera:WorldToViewportPoint(position + Vector3.new(0, size, 0))
-    local bottom, _ = Camera:WorldToViewportPoint(position - Vector3.new(0, size, 0))
+    -- Posição e tamanho da caixa
+    local size = humanoid.HipHeight * 2 + 3
+    local topPos = root.Position + Vector3.new(0, size, 0)
+    local bottomPos = root.Position - Vector3.new(0, size, 0)
+    
+    local top, visible = Camera:WorldToViewportPoint(topPos)
+    local bottom = Camera:WorldToViewportPoint(bottomPos)
     
     if not visible then return end
     
     local width = (bottom.Y - top.Y) * 0.5
     local height = bottom.Y - top.Y
-    local x = top.X - width * 0.5
-    local y = top.Y
+    local boxX = top.X - width * 0.5
+    local boxY = top.Y
     
-    -- Caixa principal
-    objects.box = createDrawing("Square", {
-        Color = color,
-        Transparency = 0.7,
-        Thickness = 2,
-        Filled = false,
-        Visible = Settings.ShowBox,
-        ZIndex = 2
-    })
-    objects.box.Size = Vector2.new(width, height)
-    objects.box.Position = Vector2.new(x, y)
+    -- Box
+    if Settings.ShowBox then
+        objects.Box = createDrawing("Square", {
+            Color = color,
+            Transparency = 0.7,
+            Thickness = 2,
+            Filled = false,
+            Visible = true,
+            ZIndex = 2,
+            Size = Vector2.new(width, height),
+            Position = Vector2.new(boxX, boxY)
+        })
+        if Settings.Outline then
+            objects.BoxOutline = createDrawing("Square", {
+                Color = Settings.Colors.Outline,
+                Transparency = 0.5,
+                Thickness = 1,
+                Filled = false,
+                Visible = true,
+                ZIndex = 1,
+                Size = Vector2.new(width + 2, height + 2),
+                Position = Vector2.new(boxX - 1, boxY - 1)
+            })
+        end
+    end
     
-    -- Bordas (para dar efeito de outline)
-    objects.boxOutline = createDrawing("Square", {
-        Color = Settings.Colors.Outline,
-        Transparency = 0.5,
-        Thickness = 1,
-        Filled = false,
-        Visible = Settings.ShowBox and Settings.Outline,
-        ZIndex = 1
-    })
-    objects.boxOutline.Size = Vector2.new(width + 2, height + 2)
-    objects.boxOutline.Position = Vector2.new(x - 1, y - 1)
+    -- Health Bar
+    if Settings.ShowHealth then
+        local healthPercent = humanoid.Health / humanoid.MaxHealth
+        objects.HealthBg = createDrawing("Square", {
+            Color = Color3.fromRGB(50, 50, 50),
+            Transparency = 0.8,
+            Filled = true,
+            Visible = true,
+            ZIndex = 3,
+            Size = Vector2.new(5, height),
+            Position = Vector2.new(boxX - 7, boxY)
+        })
+        objects.HealthBar = createDrawing("Square", {
+            Color = Color3.fromRGB(255 - 255 * healthPercent, 255 * healthPercent, 0),
+            Transparency = 0.2,
+            Filled = true,
+            Visible = true,
+            ZIndex = 4,
+            Size = Vector2.new(5, height * healthPercent),
+            Position = Vector2.new(boxX - 7, boxY + (height - height * healthPercent))
+        })
+    end
     
-    return x, y, width, height
-end
-
--- Função para desenhar a caixa 3D
-local function drawBox3D(player, color, dist, objects)
-    -- Implementação de caixa 3D mais complexa
-    -- (8 pontos do cubo projetados na tela)
-    -- Por simplicidade, vou deixar como 2D por enquanto
-    return drawBox2D(player, color, dist, objects)
-end
-
--- Função para desenhar a barra de vida
-local function drawHealthBar(player, color, x, y, width, height, objects)
-    local char = player.Character
-    if not char then return end
-    
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not humanoid then return end
-    
-    local health = humanoid.Health
-    local maxHealth = humanoid.MaxHealth
-    local percent = health / maxHealth
-    
-    -- Barra de fundo
-    objects.healthBg = createDrawing("Square", {
-        Color = Color3.fromRGB(50, 50, 50),
-        Transparency = 0.8,
-        Filled = true,
-        Visible = Settings.ShowHealth,
-        ZIndex = 3
-    })
-    objects.healthBg.Size = Vector2.new(5, height)
-    objects.healthBg.Position = Vector2.new(x - 7, y)
-    
-    -- Barra de vida
-    objects.healthBar = createDrawing("Square", {
-        Color = Color3.fromRGB(255 - (255 * percent), 255 * percent, 0),
-        Transparency = 0.2,
-        Filled = true,
-        Visible = Settings.ShowHealth,
-        ZIndex = 4
-    })
-    objects.healthBar.Size = Vector2.new(5, height * percent)
-    objects.healthBar.Position = Vector2.new(x - 7, y + (height - height * percent))
-end
-
--- Função para desenhar o tracer (linha do centro até o jogador)
-local function drawTracer(player, color, objects)
-    local char = player.Character
-    if not char then return end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local pos, visible = Camera:WorldToViewportPoint(root.Position)
-    if not visible then return end
-    
-    local screenPos = Vector2.new(pos.X, pos.Y)
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, 
-        Settings.TracerPosition == "Bottom" and Camera.ViewportSize.Y or
-        Settings.TracerPosition == "Top" and 0 or
-        Camera.ViewportSize.Y / 2)
-    
-    objects.tracer = createDrawing("Line", {
-        Color = color,
-        Thickness = 2,
-        Transparency = 0.8,
-        Visible = Settings.ShowTracer,
-        From = screenCenter,
-        To = screenPos,
-        ZIndex = 5
-    })
-end
-
--- Função para desenhar o nome
-local function drawName(player, color, x, y, width, dist, objects)
-    objects.name = createDrawing("Text", {
-        Text = player.Name,
-        Color = Settings.Colors.Text,
-        Outline = Settings.Outline,
-        OutlineColor = Settings.Colors.Outline,
-        Size = Settings.FontSize,
-        Center = true,
-        Position = Vector2.new(x + width / 2, y - 20),
-        Visible = Settings.ShowName,
-        ZIndex = 6
-    })
-    
-    if Settings.ShowDistance then
-        objects.distance = createDrawing("Text", {
-            Text = string.format("[%.0fm]", dist),
+    -- Name
+    if Settings.ShowName then
+        objects.Name = createDrawing("Text", {
+            Text = player.Name,
             Color = Settings.Colors.Text,
             Outline = Settings.Outline,
             OutlineColor = Settings.Colors.Outline,
-            Size = Settings.FontSize - 2,
+            Size = Settings.FontSize,
             Center = true,
-            Position = Vector2.new(x + width / 2, y - 35),
+            Position = Vector2.new(boxX + width/2, boxY - 20),
             Visible = true,
-            ZIndex = 6
+            ZIndex = 5
         })
+        if Settings.ShowDistance then
+            objects.Distance = createDrawing("Text", {
+                Text = string.format("[%.0fm]", dist),
+                Color = Settings.Colors.Text,
+                Outline = Settings.Outline,
+                OutlineColor = Settings.Colors.Outline,
+                Size = Settings.FontSize - 2,
+                Center = true,
+                Position = Vector2.new(boxX + width/2, boxY - 35),
+                Visible = true,
+                ZIndex = 5
+            })
+        end
+    end
+    
+    -- Tracer
+    if Settings.ShowTracer then
+        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2,
+            Settings.TracerPosition == "Bottom" and Camera.ViewportSize.Y or
+            Settings.TracerPosition == "Top" and 0 or
+            Camera.ViewportSize.Y / 2)
+        objects.Tracer = createDrawing("Line", {
+            Color = Settings.Colors.Tracer,
+            Thickness = 2,
+            Transparency = 0.8,
+            Visible = true,
+            From = screenCenter,
+            To = Vector2.new(top.X, top.Y),
+            ZIndex = 3
+        })
+    end
+    
+    -- Head Dot
+    if Settings.ShowHeadDot then
+        local head = char:FindFirstChild("Head")
+        if head then
+            local headPos, headVis = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+            if headVis then
+                objects.HeadDot = createDrawing("Circle", {
+                    Color = color,
+                    Thickness = 2,
+                    Filled = true,
+                    Radius = 4,
+                    NumSides = 12,
+                    Position = Vector2.new(headPos.X, headPos.Y),
+                    Visible = true,
+                    ZIndex = 6
+                })
+            end
+        end
     end
 end
 
--- Função para desenhar o ponto na cabeça
-local function drawHeadDot(player, color, objects)
-    local char = player.Character
-    if not char then return end
-    
-    local head = char:FindFirstChild("Head")
-    if not head then return end
-    
-    local pos, visible = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-    if not visible then return end
-    
-    objects.headDot = createDrawing("Circle", {
-        Color = color,
-        Thickness = 2,
-        Filled = true,
-        Radius = 4,
-        NumSides = 12,
-        Position = Vector2.new(pos.X, pos.Y),
-        Visible = Settings.ShowHeadDot,
-        ZIndex = 7
-    })
+-- Função para desenhar o círculo do aimbot
+local function drawAimCircle()
+    if not Settings.AimCircle then
+        if AimCircleObj then
+            removeDrawing(AimCircleObj)
+            AimCircleObj = nil
+        end
+        return
+    end
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    if not AimCircleObj then
+        AimCircleObj = createDrawing("Circle", {
+            Color = Settings.AimCircleColor,
+            Thickness = 2,
+            Filled = false,
+            Radius = Settings.AimCircleRadius,
+            NumSides = 60,
+            Position = center,
+            Visible = true,
+            ZIndex = 10
+        })
+    else
+        AimCircleObj.Color = Settings.AimCircleColor
+        AimCircleObj.Radius = Settings.AimCircleRadius
+        AimCircleObj.Position = center
+        AimCircleObj.Visible = true
+    end
 end
 
--- Função principal de atualização
-local function updateESP()
-    if not Settings.Enabled then
-        -- Limpar todos os desenhos
-        for _, objects in pairs(ESPObjects) do
-            for _, obj in pairs(objects) do
-                pcall(function() obj:Remove() end)
+-- Função para encontrar o alvo mais próximo dentro do círculo
+local function getClosestTarget()
+    local closest = nil
+    local closestDist = math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isValidPlayer(player) then
+            local root = player.Character.HumanoidRootPart
+            local pos, visible = Camera:WorldToViewportPoint(root.Position)
+            if visible then
+                local screenPos = Vector2.new(pos.X, pos.Y)
+                local dist = (screenPos - center).Magnitude
+                if dist < Settings.AimCircleRadius and dist < closestDist then
+                    closest = player
+                    closestDist = dist
+                end
             end
         end
-        ESPObjects = {}
+    end
+    return closest
+end
+
+-- Função do aimbot (mira suave)
+local function doAimbot(target)
+    if not target or not target.Character then return end
+    local root = target.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local targetPos = root.Position
+    local cameraPos = Camera.CFrame.Position
+    local direction = (targetPos - cameraPos).Unit
+    local newCFrame = CFrame.lookAt(cameraPos, cameraPos + direction)
+    
+    -- Suavização
+    local currentCF = Camera.CFrame
+    local smoothCF = currentCF:Lerp(newCFrame, Settings.AimSmoothness)
+    Camera.CFrame = smoothCF
+end
+
+-- HUD com informações do jogador
+local function drawHUD()
+    if not Settings.ShowHUD then
+        if HUDElements.Container then
+            for _, obj in pairs(HUDElements) do
+                removeDrawing(obj)
+            end
+            HUDElements = {}
+        end
         return
     end
     
-    local currentPlayers = Players:GetPlayers()
-    
-    -- Remover ESP de jogadores que saíram
-    for player, objects in pairs(ESPObjects) do
-        if not table.find(currentPlayers, player) or player == LocalPlayer then
+    -- Se não existir, criar elementos
+    if not HUDElements.Container then
+        local x, y = 10, 10
+        local bg = createDrawing("Square", {
+            Color = Color3.fromRGB(0, 0, 0),
+            Transparency = 0.5,
+            Filled = true,
+            Size = Vector2.new(200, 100),
+            Position = Vector2.new(x, y),
+            ZIndex = 100
+        })
+        HUDElements.Container = bg
+        
+        HUDElements.Title = createDrawing("Text", {
+            Text = "ESP ULTIMATE",
+            Color = Settings.Colors.HUD,
+            Size = 16,
+            Outline = true,
+            OutlineColor = Color3.new(0,0,0),
+            Position = Vector2.new(x + 10, y + 5),
+            ZIndex = 101
+        })
+        
+        HUDElements.Status = createDrawing("Text", {
+            Text = "Status: " .. (Settings.Enabled and "ON" or "OFF"),
+            Color = Settings.Enabled and Color3.new(0,1,0) or Color3.new(1,0,0),
+            Size = 14,
+            Position = Vector2.new(x + 10, y + 25),
+            ZIndex = 101
+        })
+        
+        HUDElements.Players = createDrawing("Text", {
+            Text = "Players: " .. #Players:GetPlayers(),
+            Color = Color3.new(1,1,1),
+            Size = 14,
+            Position = Vector2.new(x + 10, y + 45),
+            ZIndex = 101
+        })
+        
+        HUDElements.Aimbot = createDrawing("Text", {
+            Text = "Aimbot: " .. (Settings.AimEnabled and "ON" or "OFF"),
+            Color = Settings.AimEnabled and Color3.new(0,1,0) or Color3.new(1,0,0),
+            Size = 14,
+            Position = Vector2.new(x + 10, y + 65),
+            ZIndex = 101
+        })
+        
+        HUDElements.FPS = createDrawing("Text", {
+            Text = "FPS: 60",
+            Color = Color3.new(1,1,1),
+            Size = 14,
+            Position = Vector2.new(x + 10, y + 85),
+            ZIndex = 101
+        })
+    else
+        -- Atualizar textos
+        HUDElements.Status.Text = "Status: " .. (Settings.Enabled and "ON" or "OFF")
+        HUDElements.Status.Color = Settings.Enabled and Color3.new(0,1,0) or Color3.new(1,0,0)
+        HUDElements.Players.Text = "Players: " .. #Players:GetPlayers()
+        HUDElements.Aimbot.Text = "Aimbot: " .. (Settings.AimEnabled and "ON" or "OFF")
+        HUDElements.Aimbot.Color = Settings.AimEnabled and Color3.new(0,1,0) or Color3.new(1,0,0)
+        HUDElements.FPS.Text = string.format("FPS: %.0f", 1 / RunService.RenderStepped:Wait())
+    end
+end
+
+-- Loop principal de renderização
+RunService.RenderStepped:Connect(function()
+    if not Settings.Enabled then
+        -- Limpar todos os ESP
+        for player, objects in pairs(ESPObjects) do
             for _, obj in pairs(objects) do
-                pcall(function() obj:Remove() end)
+                removeDrawing(obj)
             end
-            ESPObjects[player] = nil
         end
+        ESPObjects = {}
+        if AimCircleObj then
+            removeDrawing(AimCircleObj)
+            AimCircleObj = nil
+        end
+        drawHUD()
+        return
     end
     
-    -- Atualizar ESP para cada jogador
-    for _, player in ipairs(currentPlayers) do
+    -- Desenhar círculo do aimbot
+    drawAimCircle()
+    
+    -- ESP para cada jogador
+    for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local dist = getDistance(player)
             if dist < Settings.MaxDistance then
-                local color = getPlayerColor(player)
-                
-                -- Inicializar ou pegar objetos existentes
-                if not ESPObjects[player] then
-                    ESPObjects[player] = {}
-                end
-                local objects = ESPObjects[player]
-                
-                -- Remover objetos antigos
-                for _, obj in pairs(objects) do
-                    pcall(function() obj:Remove() end)
-                end
-                objects = {}
-                ESPObjects[player] = objects
-                
-                -- Desenhar caixa
-                local x, y, width, height
-                if Settings.BoxType == "2D" then
-                    x, y, width, height = drawBox2D(player, color, dist, objects)
-                else
-                    x, y, width, height = drawBox3D(player, color, dist, objects)
-                end
-                
-                if x and y then
-                    drawHealthBar(player, color, x, y, width, height, objects)
-                    drawName(player, color, x, y, width, dist, objects)
-                end
-                
-                drawTracer(player, color, objects)
-                drawHeadDot(player, color, objects)
+                drawESP(player, dist)
             else
-                -- Jogador muito longe, remover ESP
+                -- Remover ESP se existir
                 if ESPObjects[player] then
                     for _, obj in pairs(ESPObjects[player]) do
-                        pcall(function() obj:Remove() end)
+                        removeDrawing(obj)
                     end
                     ESPObjects[player] = nil
                 end
             end
         end
     end
-end
+    
+    -- Aimbot (se ativado e tecla pressionada)
+    if Settings.AimEnabled and UserInputService:IsKeyDown(Enum.KeyCode[Settings.AimKey]) then
+        local target = getClosestTarget()
+        doAimbot(target)
+    end
+    
+    -- Atualizar HUD
+    drawHUD()
+end)
 
--- Menu de configuração (GUI interativa)
-local function createConfigMenu()
+-- Menu de configuração (GUI)
+local function createMenu()
     local menuOpen = false
+    local menuGui
     
     local function toggleMenu()
-        menuOpen = not menuOpen
         if menuOpen then
-            -- Criar menu flutuante
-            local menu = Instance.new("ScreenGui")
-            menu.Name = "ESPConfigMenu"
-            menu.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            if menuGui then
+                menuGui:Destroy()
+                menuGui = nil
+            end
+            menuOpen = false
+        else
+            menuGui = Instance.new("ScreenGui")
+            menuGui.Name = "ESPMenu"
+            menuGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             
             local frame = Instance.new("Frame")
-            frame.Size = UDim2.new(0, 300, 0, 400)
-            frame.Position = UDim2.new(0.5, -150, 0.5, -200)
+            frame.Size = UDim2.new(0, 400, 0, 500)
+            frame.Position = UDim2.new(0.5, -200, 0.5, -250)
             frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            frame.BackgroundTransparency = 0.1
+            frame.BackgroundTransparency = 0.2
             frame.BorderSizePixel = 0
-            frame.Parent = menu
+            frame.Active = true
+            frame.Draggable = true
+            frame.Parent = menuGui
             
             local title = Instance.new("TextLabel")
             title.Size = UDim2.new(1, 0, 0, 30)
             title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-            title.Text = "ESP Configuration"
+            title.Text = "ESP ULTIMATE - CONFIGURAÇÃO"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
             title.Font = Enum.Font.SourceSansBold
             title.TextSize = 18
             title.Parent = frame
             
-            -- Checkbox para Enabled
-            local enabledCheck = Instance.new("TextButton")
-            enabledCheck.Size = UDim2.new(1, -20, 0, 30)
-            enabledCheck.Position = UDim2.new(0, 10, 0, 40)
-            enabledCheck.BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-            enabledCheck.Text = "Enabled: " .. tostring(Settings.Enabled)
-            enabledCheck.TextColor3 = Color3.fromRGB(255, 255, 255)
-            enabledCheck.Parent = frame
-            enabledCheck.MouseButton1Click:Connect(function()
-                Settings.Enabled = not Settings.Enabled
-                enabledCheck.BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-                enabledCheck.Text = "Enabled: " .. tostring(Settings.Enabled)
-            end)
+            local yOffset = 40
             
-            -- Checkbox para TeamCheck
-            local teamCheck = Instance.new("TextButton")
-            teamCheck.Size = UDim2.new(1, -20, 0, 30)
-            teamCheck.Position = UDim2.new(0, 10, 0, 80)
-            teamCheck.BackgroundColor3 = Settings.TeamCheck and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-            teamCheck.Text = "Team Check: " .. tostring(Settings.TeamCheck)
-            teamCheck.TextColor3 = Color3.fromRGB(255, 255, 255)
-            teamCheck.Parent = frame
-            teamCheck.MouseButton1Click:Connect(function()
-                Settings.TeamCheck = not Settings.TeamCheck
-                teamCheck.BackgroundColor3 = Settings.TeamCheck and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-                teamCheck.Text = "Team Check: " .. tostring(Settings.TeamCheck)
-            end)
+            -- Função para criar checkbox
+            local function createCheckbox(name, setting, y)
+                local btn = Instance.new("TextButton")
+                btn.Size = UDim2.new(1, -20, 0, 30)
+                btn.Position = UDim2.new(0, 10, 0, y)
+                btn.BackgroundColor3 = Settings[setting] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                btn.Text = name .. ": " .. tostring(Settings[setting])
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btn.Parent = frame
+                btn.MouseButton1Click:Connect(function()
+                    Settings[setting] = not Settings[setting]
+                    btn.BackgroundColor3 = Settings[setting] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                    btn.Text = name .. ": " .. tostring(Settings[setting])
+                end)
+            end
             
-            -- Botão para fechar
+            createCheckbox("Enabled", "Enabled", yOffset); yOffset = yOffset + 35
+            createCheckbox("Team Check", "TeamCheck", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Box", "ShowBox", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Name", "ShowName", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Health", "ShowHealth", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Distance", "ShowDistance", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Tracer", "ShowTracer", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show Head Dot", "ShowHeadDot", yOffset); yOffset = yOffset + 35
+            createCheckbox("Show HUD", "ShowHUD", yOffset); yOffset = yOffset + 35
+            createCheckbox("Aimbot Enabled", "AimEnabled", yOffset); yOffset = yOffset + 35
+            createCheckbox("Aim Circle", "AimCircle", yOffset); yOffset = yOffset + 35
+            
+            -- Slider para raio do círculo
+            local radiusLabel = Instance.new("TextLabel")
+            radiusLabel.Size = UDim2.new(0.5, -10, 0, 30)
+            radiusLabel.Position = UDim2.new(0, 10, 0, yOffset)
+            radiusLabel.BackgroundTransparency = 1
+            radiusLabel.Text = "Circle Radius: " .. Settings.AimCircleRadius
+            radiusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            radiusLabel.Parent = frame
+            
+            local radiusSlider = Instance.new("TextBox")
+            radiusSlider.Size = UDim2.new(0.3, 0, 0, 30)
+            radiusSlider.Position = UDim2.new(0.6, 0, 0, yOffset)
+            radiusSlider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            radiusSlider.Text = tostring(Settings.AimCircleRadius)
+            radiusSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+            radiusSlider.Parent = frame
+            radiusSlider.FocusLost:Connect(function()
+                local val = tonumber(radiusSlider.Text)
+                if val and val > 0 then
+                    Settings.AimCircleRadius = val
+                    radiusLabel.Text = "Circle Radius: " .. val
+                end
+            end)
+            yOffset = yOffset + 35
+            
+            -- Tecla do aimbot
+            local keyLabel = Instance.new("TextLabel")
+            keyLabel.Size = UDim2.new(0.5, -10, 0, 30)
+            keyLabel.Position = UDim2.new(0, 10, 0, yOffset)
+            keyLabel.BackgroundTransparency = 1
+            keyLabel.Text = "Aimbot Key: " .. Settings.AimKey
+            keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            keyLabel.Parent = frame
+            
+            local keyBox = Instance.new("TextBox")
+            keyBox.Size = UDim2.new(0.3, 0, 0, 30)
+            keyBox.Position = UDim2.new(0.6, 0, 0, yOffset)
+            keyBox.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            keyBox.Text = Settings.AimKey
+            keyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+            keyBox.Parent = frame
+            keyBox.FocusLost:Connect(function()
+                local key = keyBox.Text:upper()
+                if #key == 1 and key:match("%a") then
+                    Settings.AimKey = key
+                    keyLabel.Text = "Aimbot Key: " .. key
+                end
+            end)
+            yOffset = yOffset + 35
+            
+            -- Botão fechar
             local closeBtn = Instance.new("TextButton")
             closeBtn.Size = UDim2.new(0, 100, 0, 30)
             closeBtn.Position = UDim2.new(0.5, -50, 1, -40)
             closeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-            closeBtn.Text = "Close"
+            closeBtn.Text = "Fechar"
             closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             closeBtn.Parent = frame
             closeBtn.MouseButton1Click:Connect(function()
-                menu:Destroy()
-                menuOpen = false
+                toggleMenu()
             end)
             
-            -- Botão para toggle via tecla (ex: Insert)
-            UserInputService.InputBegan:Connect(function(input)
-                if input.KeyCode == Enum.KeyCode.Insert then
-                    if menuOpen then
-                        menu:Destroy()
-                        menuOpen = false
-                    else
-                        toggleMenu()
-                    end
-                end
-            end)
+            menuOpen = true
         end
     end
     
-    -- Atalho de tecla para abrir/fechar menu
+    -- Atalho: Insert para abrir/fechar menu
     UserInputService.InputBegan:Connect(function(input)
         if input.KeyCode == Enum.KeyCode.Insert then
             toggleMenu()
         end
     end)
     
-    print("ESP carregado! Pressione INSERT para abrir o menu de configuração.")
+    print("Pressione INSERT para abrir o menu de configuração.")
 end
 
--- Iniciar o ESP
-coroutine.wrap(function()
-    while true do
-        pcall(updateESP)
-        wait(Settings.UpdateRate)
-    end
-end)()
-
--- Criar menu de configuração
-createConfigMenu()
-
--- Aviso de carregamento
-print("ESP Ultimate carregado com sucesso!")
+-- Iniciar menu
+createMenu()
