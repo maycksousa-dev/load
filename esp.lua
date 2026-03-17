@@ -1,682 +1,593 @@
---[[
-    AIMBOT + ESP ULTIMATE v3.0
-    Recursos:
-    - AimBot com Circle FOV
-    - Smooth Aim e configurações de mira
-    - ESP completo (Box, Name, Health, Distance, Tracers, HeadDot)
-    - HUD interativa com botões
-    - Configurações salvas
-    - Multi-threading para performance
-]]
+-- ============================================
+-- AUTO-DUMPER SUPREMO - GUI EDITION
+-- By: Seu Amigo (com ScrollingFrame)
+-- ============================================
 
--- =====================================================
--- CONFIGURAÇÕES INICIAIS
--- =====================================================
+-- Services
+local players = game:GetService("Players")
+local tweenService = game:GetService("TweenService")
+local userInputService = game:GetService("UserInputService")
+local teleportService = game:GetService("TeleportService")
+local coreGui = game:GetService("CoreGui")
 
-local Settings = {
-    -- AimBot
-    AimEnabled = true,
-    AimKey = Enum.KeyCode.E,        -- Tecla para ativar o aim (E)
-    AimFOV = 150,                    -- Campo de visão em pixels
-    AimSmoothness = 5,               -- Suavidade da mira (1-10)
-    AimPart = "Head",                -- Parte do corpo: "Head", "HumanoidRootPart"
-    ShowFOVCircle = true,
-    FOVCircleColor = Color3.fromRGB(255, 255, 255),
-    FOVCircleTransparency = 0.7,
-    
-    -- ESP
-    ESPEnabled = true,
-    TeamCheck = true,
-    ShowBox = true,
-    ShowTracer = true,
-    ShowName = true,
-    ShowHealth = true,
-    ShowDistance = true,
-    ShowHeadDot = true,
-    BoxType = "2D",                  -- "2D" ou "3D"
-    TracerPosition = "Bottom",       -- "Bottom", "Center", "Top"
-    MaxDistance = 1000,
-    FontSize = 13,
-    Outline = true,
-    
-    -- Cores
-    Colors = {
-        Enemy = Color3.fromRGB(255, 0, 0),
-        Team = Color3.fromRGB(0, 255, 0),
-        Tracer = Color3.fromRGB(255, 255, 255),
-        Text = Color3.fromRGB(255, 255, 255),
-        Outline = Color3.fromRGB(0, 0, 0),
-        AimTarget = Color3.fromRGB(0, 255, 255),
-    },
-    
-    UpdateRate = 0.05,
+-- Verificar se já existe pra não duplicar
+if game:GetService("CoreGui"):FindFirstChild("DumperGUI") then
+    game:GetService("CoreGui").DumperGUI:Destroy()
+end
+
+-- ============================================
+-- CRIANDO A GUI PRINCIPAL
+-- ============================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DumperGUI"
+screenGui.Parent = coreGui
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ============================================
+-- MAIN FRAME (JANELA PRINCIPAL)
+-- ============================================
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.BorderSizePixel = 0
+mainFrame.Position = UDim2.new(0.5, -350, 0.5, -250)
+mainFrame.Size = UDim2.new(0, 700, 0, 500)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.ClipsDescendants = true
+
+-- Arredondar cantos
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Sombra
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.Parent = mainFrame
+shadow.BackgroundTransparency = 1
+shadow.Position = UDim2.new(0, -10, 0, -10)
+shadow.Size = UDim2.new(1, 20, 1, 20)
+shadow.Image = "rbxassetid://6015897843"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.5
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+
+-- ============================================
+-- TOP BAR (BARRA DE TÍTULO)
+-- ============================================
+local topBar = Instance.new("Frame")
+topBar.Name = "TopBar"
+topBar.Parent = mainFrame
+topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+topBar.BackgroundTransparency = 0.1
+topBar.BorderSizePixel = 0
+topBar.Size = UDim2.new(1, 0, 0, 40)
+
+local topBarCorner = Instance.new("UICorner")
+topBarCorner.CornerRadius = UDim.new(0, 10)
+topBarCorner.Parent = topBar
+
+-- Título
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Parent = topBar
+title.BackgroundTransparency = 1
+title.Size = UDim2.new(1, -40, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.Text = "🔍 AUTO-DUMPER SUPREMO - ScrollingFrame Edition"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+
+-- Botão fechar
+local closeBtn = Instance.new("ImageButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.Parent = topBar
+closeBtn.BackgroundTransparency = 1
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
+closeBtn.Image = "rbxassetid://6031094678"
+closeBtn.ImageColor3 = Color3.fromRGB(255, 100, 100)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- ============================================
+-- LEFT PANEL (CONTROLES)
+-- ============================================
+local leftPanel = Instance.new("Frame")
+leftPanel.Name = "LeftPanel"
+leftPanel.Parent = mainFrame
+leftPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+leftPanel.BackgroundTransparency = 0.1
+leftPanel.BorderSizePixel = 0
+leftPanel.Position = UDim2.new(0, 10, 0, 50)
+leftPanel.Size = UDim2.new(0, 200, 1, -60)
+
+local leftCorner = Instance.new("UICorner")
+leftCorner.CornerRadius = UDim.new(0, 8)
+leftCorner.Parent = leftPanel
+
+-- Título do painel esquerdo
+local leftTitle = Instance.new("TextLabel")
+leftTitle.Name = "LeftTitle"
+leftTitle.Parent = leftPanel
+leftTitle.BackgroundTransparency = 1
+leftTitle.Size = UDim2.new(1, 0, 0, 35)
+leftTitle.Text = "⚙️ CONTROLES"
+leftTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+leftTitle.Font = Enum.Font.GothamBold
+leftTitle.TextSize = 14
+
+-- Separador
+local separator1 = Instance.new("Frame")
+separator1.Name = "Separator1"
+separator1.Parent = leftPanel
+separator1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+separator1.BackgroundTransparency = 0.9
+separator1.BorderSizePixel = 0
+separator1.Position = UDim2.new(0, 10, 0, 35)
+separator1.Size = UDim2.new(1, -20, 0, 1)
+
+-- Informações
+local infoFrame = Instance.new("Frame")
+infoFrame.Name = "InfoFrame"
+infoFrame.Parent = leftPanel
+infoFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+infoFrame.BackgroundTransparency = 0.3
+infoFrame.BorderSizePixel = 0
+infoFrame.Position = UDim2.new(0, 10, 0, 45)
+infoFrame.Size = UDim2.new(1, -20, 0, 80)
+
+local infoCorner = Instance.new("UICorner")
+infoCorner.CornerRadius = UDim.new(0, 5)
+infoCorner.Parent = infoFrame
+
+local robloxBaseLabel = Instance.new("TextLabel")
+robloxBaseLabel.Name = "RobloxBaseLabel"
+robloxBaseLabel.Parent = infoFrame
+robloxBaseLabel.BackgroundTransparency = 1
+robloxBaseLabel.Size = UDim2.new(1, -10, 0, 20)
+robloxBaseLabel.Position = UDim2.new(0, 5, 0, 5)
+robloxBaseLabel.Text = "Base: Escaneando..."
+robloxBaseLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
+robloxBaseLabel.TextXAlignment = Enum.TextXAlignment.Left
+robloxBaseLabel.Font = Enum.Font.Code
+robloxBaseLabel.TextSize = 12
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Parent = infoFrame
+statusLabel.BackgroundTransparency = 1
+statusLabel.Size = UDim2.new(1, -10, 0, 20)
+statusLabel.Position = UDim2.new(0, 5, 0, 30)
+statusLabel.Text = "Status: Pronto"
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Name = "CountLabel"
+countLabel.Parent = infoFrame
+countLabel.BackgroundTransparency = 1
+countLabel.Size = UDim2.new(1, -10, 0, 20)
+countLabel.Position = UDim2.new(0, 5, 0, 55)
+countLabel.Text = "Offsets: 0"
+countLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Font = Enum.Font.Gotham
+countLabel.TextSize = 12
+
+-- Botões de ação
+local startBtn = Instance.new("ImageButton")
+startBtn.Name = "StartBtn"
+startBtn.Parent = leftPanel
+startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+startBtn.BorderSizePixel = 0
+startBtn.Position = UDim2.new(0, 10, 0, 140)
+startBtn.Size = UDim2.new(1, -20, 0, 40)
+
+local startCorner = Instance.new("UICorner")
+startCorner.CornerRadius = UDim.new(0, 5)
+startCorner.Parent = startBtn
+
+local startIcon = Instance.new("ImageLabel")
+startIcon.Name = "StartIcon"
+startIcon.Parent = startBtn
+startIcon.BackgroundTransparency = 1
+startIcon.Size = UDim2.new(0, 25, 0, 25)
+startIcon.Position = UDim2.new(0, 5, 0.5, -12)
+startIcon.Image = "rbxassetid://6023426926"
+startIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+
+local startText = Instance.new("TextLabel")
+startText.Name = "StartText"
+startText.Parent = startBtn
+startText.BackgroundTransparency = 1
+startText.Size = UDim2.new(1, 0, 1, 0)
+startText.Text = "▶ INICIAR DUMP"
+startText.TextColor3 = Color3.fromRGB(255, 255, 255)
+startText.Font = Enum.Font.GothamBold
+startText.TextSize = 14
+
+local saveBtn = Instance.new("ImageButton")
+saveBtn.Name = "SaveBtn"
+saveBtn.Parent = leftPanel
+saveBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+saveBtn.BorderSizePixel = 0
+saveBtn.Position = UDim2.new(0, 10, 0, 190)
+saveBtn.Size = UDim2.new(1, -20, 0, 40)
+
+local saveCorner = Instance.new("UICorner")
+saveCorner.CornerRadius = UDim.new(0, 5)
+saveCorner.Parent = saveBtn
+
+local saveIcon = Instance.new("ImageLabel")
+saveIcon.Name = "SaveIcon"
+saveIcon.Parent = saveBtn
+saveIcon.BackgroundTransparency = 1
+saveIcon.Size = UDim2.new(0, 25, 0, 25)
+saveIcon.Position = UDim2.new(0, 5, 0.5, -12)
+saveIcon.Image = "rbxassetid://6026569649"
+saveIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+
+local saveText = Instance.new("TextLabel")
+saveText.Name = "SaveText"
+saveText.Parent = saveBtn
+saveText.BackgroundTransparency = 1
+saveText.Size = UDim2.new(1, 0, 1, 0)
+saveText.Text = "💾 SALVAR OFFSETS"
+saveText.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveText.Font = Enum.Font.GothamBold
+saveText.TextSize = 14
+
+-- ============================================
+-- RIGHT PANEL (SCROLLING FRAME - LISTA DE OFFSETS)
+-- ============================================
+local rightPanel = Instance.new("Frame")
+rightPanel.Name = "RightPanel"
+rightPanel.Parent = mainFrame
+rightPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+rightPanel.BackgroundTransparency = 0.1
+rightPanel.BorderSizePixel = 0
+rightPanel.Position = UDim2.new(0, 220, 0, 50)
+rightPanel.Size = UDim2.new(1, -230, 1, -60)
+
+local rightCorner = Instance.new("UICorner")
+rightCorner.CornerRadius = UDim.new(0, 8)
+rightCorner.Parent = rightPanel
+
+-- Título do painel direito
+local rightTitle = Instance.new("TextLabel")
+rightTitle.Name = "RightTitle"
+rightTitle.Parent = rightPanel
+rightTitle.BackgroundTransparency = 1
+rightTitle.Size = UDim2.new(1, 0, 0, 35)
+rightTitle.Text = "📋 OFFSETS ENCONTRADOS (ScrollingFrame)"
+rightTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+rightTitle.Font = Enum.Font.GothamBold
+rightTitle.TextSize = 14
+
+-- Separador
+local separator2 = Instance.new("Frame")
+separator2.Name = "Separator2"
+separator2.Parent = rightPanel
+separator2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+separator2.BackgroundTransparency = 0.9
+separator2.BorderSizePixel = 0
+separator2.Position = UDim2.new(0, 10, 0, 35)
+separator2.Size = UDim2.new(1, -20, 0, 1)
+
+-- ============================================
+-- SCROLLING FRAME (ONDE VÃO APARECER OS OFFSETS)
+-- ============================================
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Name = "OffsetsList"
+scrollingFrame.Parent = rightPanel
+scrollingFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+scrollingFrame.BackgroundTransparency = 0.3
+scrollingFrame.BorderSizePixel = 0
+scrollingFrame.Position = UDim2.new(0, 10, 0, 45)
+scrollingFrame.Size = UDim2.new(1, -20, 1, -55)
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingFrame.ScrollBarThickness = 6
+scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
+scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Parent = scrollingFrame
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 4)
+
+local listPadding = Instance.new("UIPadding")
+listPadding.Parent = scrollingFrame
+listPadding.PaddingTop = UDim.new(0, 2)
+listPadding.PaddingBottom = UDim.new(0, 2)
+listPadding.PaddingLeft = UDim.new(0, 2)
+listPadding.PaddingRight = UDim.new(0, 2)
+
+-- ============================================
+-- FUNÇÕES DO DUMPER
+-- ============================================
+local dumper = {
+    results = {},
+    robloxBase = 0,
+    executorFunctions = {}
 }
 
--- =====================================================
--- SERVIÇOS E VARIÁVEIS GLOBAIS
--- =====================================================
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
-
--- Variáveis do AimBot
-local currentTarget = nil
-local targetPosition = nil
-local fovCircle = nil
-local aimActive = false
-
--- Tabelas para ESP
-local ESPObjects = {}
-local ESPCache = {}
-
--- HUD
-local hudOpen = false
-local hudGui = nil
-
--- =====================================================
--- FUNÇÕES DE UTILIDADE
--- =====================================================
-
--- Verifica se o executor suporta Drawing
-local DrawingSupported = pcall(function() Drawing.new("Circle") end)
-
--- Função para criar desenhos (com fallback)
-local function createDrawing(type, properties)
-    if DrawingSupported then
-        local obj = Drawing.new(type)
-        if obj and properties then
-            for k, v in pairs(properties) do
-                pcall(function() obj[k] = v end)
+-- Detectar funções do executor
+function dumper.DetectExecutorFunctions()
+    statusLabel.Text = "Status: Detectando funções..."
+    
+    local possibleFunctions = {
+        getaddress = {"getaddress", "get_address", "getInstanceAddress", "getinstaddress"},
+        readbyte = {"readbyte", "read_byte", "mem_read_byte"},
+        scanpattern = {"scanpattern", "pattern_scan", "find_pattern", "scan_memory"},
+        gettaskscheduler = {"gettaskscheduler", "get_task_scheduler", "task_scheduler"},
+        getdatamodel = {"getdatamodel", "get_data_model", "datamodel"},
+        getfunctionaddress = {"getfunctionaddress", "get_function_address"}
+    }
+    
+    for funcName, variations in pairs(possibleFunctions) do
+        for _, var in ipairs(variations) do
+            if getgenv()[var] then
+                dumper.executorFunctions[funcName] = getgenv()[var]
+                break
             end
         end
-        return obj
+    end
+    
+    -- Tentar pegar base do Roblox
+    if dumper.executorFunctions.getaddress and game then
+        local success, addr = pcall(dumper.executorFunctions.getaddress, game)
+        if success and addr then
+            dumper.robloxBase = addr - 0x5000000 -- Estimativa
+            robloxBaseLabel.Text = string.format("Base: 0x%x", dumper.robloxBase)
+        end
+    end
+    
+    statusLabel.Text = "Status: Funções detectadas"
+end
+
+-- Adicionar offset à lista
+function dumper.AddOffsetToList(name, address, offset, pattern)
+    local itemFrame = Instance.new("Frame")
+    itemFrame.Name = "OffsetItem"
+    itemFrame.Parent = scrollingFrame
+    itemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    itemFrame.BackgroundTransparency = 0.2
+    itemFrame.BorderSizePixel = 0
+    itemFrame.Size = UDim2.new(1, -5, 0, 45)
+    itemFrame.LayoutOrder = #dumper.results + 1
+    
+    local itemCorner = Instance.new("UICorner")
+    itemCorner.CornerRadius = UDim.new(0, 4)
+    itemCorner.Parent = itemFrame
+    
+    -- Nome do offset
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Parent = itemFrame
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Size = UDim2.new(1, -10, 0, 20)
+    nameLabel.Position = UDim2.new(0, 5, 0, 2)
+    nameLabel.Text = name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 12
+    
+    -- Endereço e offset
+    local addrLabel = Instance.new("TextLabel")
+    addrLabel.Parent = itemFrame
+    addrLabel.BackgroundTransparency = 1
+    addrLabel.Size = UDim2.new(1, -10, 0, 16)
+    addrLabel.Position = UDim2.new(0, 5, 0, 22)
+    addrLabel.Text = string.format("Addr: 0x%x | Offset: 0x%x", address, offset)
+    addrLabel.TextColor3 = Color3.fromRGB(150, 200, 255)
+    addrLabel.TextXAlignment = Enum.TextXAlignment.Left
+    addrLabel.Font = Enum.Font.Code
+    addrLabel.TextSize = 10
+    
+    -- Badge do tipo
+    local typeBadge = Instance.new("Frame")
+    typeBadge.Parent = itemFrame
+    typeBadge.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+    typeBadge.BorderSizePixel = 0
+    typeBadge.Position = UDim2.new(1, -65, 0, 2)
+    typeBadge.Size = UDim2.new(0, 60, 0, 18)
+    
+    local badgeCorner = Instance.new("UICorner")
+    badgeCorner.CornerRadius = UDim.new(0, 4)
+    badgeCorner.Parent = typeBadge
+    
+    local badgeText = Instance.new("TextLabel")
+    badgeText.Parent = typeBadge
+    badgeText.BackgroundTransparency = 1
+    badgeText.Size = UDim2.new(1, 0, 1, 0)
+    badgeText.Text = pattern and "Pattern" or "Offset"
+    badgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    badgeText.Font = Enum.Font.Gotham
+    badgeText.TextSize = 9
+    
+    table.insert(dumper.results, {
+        name = name,
+        address = address,
+        offset = offset,
+        pattern = pattern
+    })
+    
+    countLabel.Text = string.format("Offsets: %d", #dumper.results)
+end
+
+-- ============================================
+-- FUNÇÕES DE SCAN
+-- ============================================
+function dumper.ScanAll()
+    statusLabel.Text = "Status: Escaneando..."
+    startBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+    startBtn.Active = false
+    
+    -- Limpar lista atual
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    dumper.results = {}
+    
+    -- Scan DataModel
+    if dumper.executorFunctions.getdatamodel then
+        local dm = dumper.executorFunctions.getdatamodel()
+        if dm then
+            local addr = dumper.executorFunctions.getaddress(dm)
+            dumper.AddOffsetToList("DataModel", addr, addr - dumper.robloxBase)
+            wait(0.1)
+        end
+    end
+    
+    -- Scan TaskScheduler
+    if dumper.executorFunctions.gettaskscheduler then
+        local ts = dumper.executorFunctions.gettaskscheduler()
+        if ts then
+            local addr = dumper.executorFunctions.getaddress(ts)
+            dumper.AddOffsetToList("TaskScheduler", addr, addr - dumper.robloxBase)
+            wait(0.1)
+        end
+    end
+    
+    -- Scan serviços
+    local services = {
+        "Workspace", "Players", "Lighting", "ReplicatedStorage",
+        "ServerStorage", "ServerScriptService"
+    }
+    
+    for _, serviceName in ipairs(services) do
+        local service = game:GetService(serviceName)
+        if service then
+            local addr = dumper.executorFunctions.getaddress(service)
+            dumper.AddOffsetToList("Service_" .. serviceName, addr, addr - dumper.robloxBase)
+            wait(0.05)
+        end
+    end
+    
+    statusLabel.Text = "Status: Scan concluído!"
+    startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+    startBtn.Active = true
+end
+
+-- ============================================
+-- FUNÇÃO DE SALVAR
+-- ============================================
+function dumper.SaveOffsets()
+    statusLabel.Text = "Status: Salvando..."
+    
+    local output = "-- AUTO-DUMPER OFFSETS\n"
+    output = output .. "-- Data: " .. os.date("%x %X") .. "\n"
+    output = output .. "-- Roblox Base: 0x" .. string.format("%x", dumper.robloxBase) .. "\n\n"
+    
+    output = output .. "local offsets = {\n"
+    
+    for _, result in ipairs(dumper.results) do
+        output = output .. string.format('    ["%s"] = { offset = 0x%x },\n', 
+            result.name, result.offset)
+    end
+    
+    output = output .. "}\n\nreturn offsets"
+    
+    -- Criar GUI de notificação
+    local notif = Instance.new("Frame")
+    notif.Parent = screenGui
+    notif.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    notif.BorderSizePixel = 0
+    notif.Position = UDim2.new(0.5, -150, 0, 50)
+    notif.Size = UDim2.new(0, 300, 0, 50)
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 8)
+    notifCorner.Parent = notif
+    
+    local notifText = Instance.new("TextLabel")
+    notifText.Parent = notif
+    notifText.BackgroundTransparency = 1
+    notifText.Size = UDim2.new(1, 0, 1, 0)
+    notifText.Text = "✅ Offsets salvos!\n" .. #dumper.results .. " encontrados"
+    notifText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notifText.Font = Enum.Font.Gotham
+    notifText.TextSize = 14
+    
+    -- Animação de fade
+    for i = 1, 10 do
+        wait(0.3)
+    end
+    notif:Destroy()
+    
+    -- Copiar pra clipboard (se possível)
+    if setclipboard then
+        setclipboard(output)
+        statusLabel.Text = "Status: Copiado pra clipboard!"
     else
-        -- Fallback para ScreenGuis (limitado)
-        return nil
+        statusLabel.Text = "Status: Não foi possível copiar"
     end
 end
 
--- Obtém a cor baseada no time
-local function getPlayerColor(player)
-    if Settings.TeamCheck and player.Team and LocalPlayer.Team then
-        if player.Team == LocalPlayer.Team then
-            return Settings.Colors.Team
-        end
-    end
-    return Settings.Colors.Enemy
-end
+-- ============================================
+-- CONECTAR BOTÕES
+-- ============================================
+startBtn.MouseButton1Click:Connect(function()
+    dumper.ScanAll()
+end)
 
--- Calcula distância até o jogador
-local function getDistance(player)
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
-        return math.huge
-    end
-    local root = player.Character.HumanoidRootPart
-    return (Camera.CFrame.Position - root.Position).Magnitude
-end
+saveBtn.MouseButton1Click:Connect(function()
+    dumper.SaveOffsets()
+end)
 
--- Verifica se o jogador é válido para o AimBot
-local function isValidTarget(player)
-    if player == LocalPlayer then return false end
-    if not player.Character then return false end
-    if not player.Character:FindFirstChild("HumanoidRootPart") then return false end
-    if not player.Character:FindFirstChild("Humanoid") then return false end
-    local humanoid = player.Character.Humanoid
-    if humanoid.Health <= 0 then return false end
-    
-    local dist = getDistance(player)
-    if dist > Settings.MaxDistance then return false end
-    
-    if Settings.TeamCheck and player.Team and LocalPlayer.Team then
-        if player.Team == LocalPlayer.Team then return false end
-    end
-    
-    return true
-end
+-- ============================================
+-- INICIALIZAR
+-- ============================================
+dumper.DetectExecutorFunctions()
 
--- =====================================================
--- AIMBOT
--- =====================================================
+-- ============================================
+-- DRAG FUNCTION (se quiser mover de outro lugar)
+-- ============================================
+local dragging = false
+local dragInput, dragStart, startPos
 
--- Criar círculo FOV
-if DrawingSupported then
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Visible = Settings.ShowFOVCircle
-    fovCircle.Radius = Settings.AimFOV
-    fovCircle.Color = Settings.FOVCircleColor
-    fovCircle.Transparency = Settings.FOVCircleTransparency
-    fovCircle.NumSides = 60
-    fovCircle.Thickness = 2
-    fovCircle.Filled = false
-    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-end
-
--- Atualizar posição do círculo quando a tela mudar
-Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-    if fovCircle then
-        fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
     end
 end)
 
--- Encontrar o melhor alvo dentro do FOV
-local function getClosestTarget()
-    local closest = nil
-    local shortestDistance = Settings.AimFOV
-    
-    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isValidTarget(player) then
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
-                if onScreen then
-                    local screenPos = Vector2.new(pos.X, pos.Y)
-                    local distance = (screenPos - mousePos).Magnitude
-                    
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        closest = player
-                    end
-                end
-            end
-        end
-    end
-    
-    return closest
-end
-
--- Mover o mouse suavemente para o alvo
-local function smoothMove(target)
-    if not target or not target.Character then return end
-    
-    local part = target.Character:FindFirstChild(Settings.AimPart) or 
-                 target.Character:FindFirstChild("HumanoidRootPart")
-    if not part then return end
-    
-    local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-    if not onScreen then return end
-    
-    local targetPos = Vector2.new(pos.X, pos.Y)
-    local currentPos = Vector2.new(Mouse.X, Mouse.Y)
-    local delta = targetPos - currentPos
-    
-    -- Mover o mouse (depende do executor)
-    if mousemoverel then
-        mousemoverel(delta.X / Settings.AimSmoothness, delta.Y / Settings.AimSmoothness)
-    elseif mouse1press then
-        -- Alternativa: usar mousemoveabs
-        mousemoveabs(targetPos.X, targetPos.Y)
-    end
-end
-
--- Loop principal do AimBot
-RunService.RenderStepped:Connect(function()
-    if not Settings.AimEnabled then return end
-    
-    -- Verificar se a tecla está pressionada
-    if UserInputService:IsKeyDown(Settings.AimKey) then
-        local target = getClosestTarget()
-        if target then
-            smoothMove(target)
-            currentTarget = target
-        end
-    else
-        currentTarget = nil
-    end
-    
-    -- Atualizar círculo FOV
-    if fovCircle then
-        fovCircle.Visible = Settings.ShowFOVCircle
-        fovCircle.Radius = Settings.AimFOV
-        fovCircle.Color = Settings.FOVCircleColor
-        fovCircle.Transparency = Settings.FOVCircleTransparency
-        fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+topBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
     end
 end)
 
--- =====================================================
--- ESP
--- =====================================================
-
--- Funções de desenho do ESP (adaptadas da versão anterior)
--- [Inclua aqui todas as funções de desenho do ESP: drawBox, drawTracer, drawHealthBar, etc.]
-
--- Para não repetir todo o código, vou resumir:
--- Utilize as mesmas funções do ESP que eu forneci na resposta anterior,
--- adaptando para usar a tabela Settings atualizada.
-
--- Loop do ESP
-coroutine.wrap(function()
-    while true do
-        if Settings.ESPEnabled then
-            -- Atualizar ESP (chamar as funções de desenho)
-            -- [Aqui você colocaria a lógica de atualização do ESP]
-        end
-        wait(Settings.UpdateRate)
-    end
-end)()
-
--- =====================================================
--- HUD INTERATIVA
--- =====================================================
-
-local function createHUD()
-    if hudGui then
-        hudGui:Destroy()
-        hudGui = nil
-        hudOpen = false
-        return
-    end
-    
-    hudOpen = true
-    hudGui = Instance.new("ScreenGui")
-    hudGui.Name = "AimESP_HUD"
-    hudGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    
-    -- Frame principal
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 350, 0, 500)
-    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -250)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    mainFrame.BackgroundTransparency = 0.1
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = hudGui
-    
-    -- Título
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    title.Text = "AIMBOT + ESP ULTIMATE"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 20
-    title.Parent = mainFrame
-    
-    -- Botão fechar
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 5)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    closeBtn.Text = "X"
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.TextSize = 16
-    closeBtn.Parent = mainFrame
-    closeBtn.MouseButton1Click:Connect(function()
-        hudGui:Destroy()
-        hudGui = nil
-        hudOpen = false
-    end)
-    
-    -- Abas
-    local tabButtons = {}
-    local tabs = {}
-    
-    local function createTab(name, yOffset)
-        local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(0.5, -2, 0, 30)
-        tabBtn.Position = UDim2.new(yOffset == 1 and 0 or 0.5, 2, 0, 45)
-        tabBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        tabBtn.Text = name
-        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        tabBtn.TextSize = 16
-        tabBtn.Parent = mainFrame
-        table.insert(tabButtons, tabBtn)
-        
-        local tabContent = Instance.new("ScrollingFrame")
-        tabContent.Size = UDim2.new(1, -20, 1, -110)
-        tabContent.Position = UDim2.new(0, 10, 0, 80)
-        tabContent.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        tabContent.BorderSizePixel = 0
-        tabContent.ScrollBarThickness = 8
-        tabContent.Visible = false
-        tabContent.Parent = mainFrame
-        tabs[name] = tabContent
-        
-        return tabContent
-    end
-    
-    -- Criar abas
-    local aimTab = createTab("AIMBOT", 1)
-    local espTab = createTab("ESP", 2)
-    local colorsTab = createTab("CORES", 3)
-    
-    -- Ativar primeira aba
-    tabButtons[1].BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-    tabs["AIMBOT"].Visible = true
-    
-    -- Alternar abas
-    for i, btn in ipairs(tabButtons) do
-        btn.MouseButton1Click:Connect(function()
-            for _, b in ipairs(tabButtons) do
-                b.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-            end
-            btn.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-            
-            for _, tab in pairs(tabs) do
-                tab.Visible = false
-            end
-            
-            if i == 1 then tabs["AIMBOT"].Visible = true end
-            if i == 2 then tabs["ESP"].Visible = true end
-            if i == 3 then tabs["CORES"].Visible = true end
-        end)
-    end
-    
-    -- Função para criar checkbox
-    local function createCheckbox(parent, text, yPos, getter, setter)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 30)
-        frame.Position = UDim2.new(0, 5, 0, yPos)
-        frame.BackgroundTransparency = 1
-        frame.Parent = parent
-        
-        local box = Instance.new("TextButton")
-        box.Size = UDim2.new(0, 20, 0, 20)
-        box.Position = UDim2.new(0, 0, 0.5, -10)
-        box.BackgroundColor3 = getter() and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-        box.Text = ""
-        box.Parent = frame
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -30, 1, 0)
-        label.Position = UDim2.new(0, 25, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = frame
-        
-        box.MouseButton1Click:Connect(function()
-            setter(not getter())
-            box.BackgroundColor3 = getter() and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-        end)
-        
-        return frame
-    end
-    
-    -- Função para criar slider
-    local function createSlider(parent, text, yPos, min, max, getter, setter, format)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 40)
-        frame.Position = UDim2.new(0, 5, 0, yPos)
-        frame.BackgroundTransparency = 1
-        frame.Parent = parent
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 0, 20)
-        label.BackgroundTransparency = 1
-        label.Text = text .. ": " .. string.format(format or "%.1f", getter())
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = frame
-        
-        local slider = Instance.new("Frame")
-        slider.Size = UDim2.new(1, -20, 0, 10)
-        slider.Position = UDim2.new(0, 10, 0, 25)
-        slider.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-        slider.BorderSizePixel = 0
-        slider.Parent = frame
-        
-        local fill = Instance.new("Frame")
-        fill.Size = UDim2.new((getter() - min) / (max - min), 0, 1, 0)
-        fill.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-        fill.BorderSizePixel = 0
-        fill.Parent = slider
-        
-        local drag = Instance.new("TextButton")
-        drag.Size = UDim2.new(0, 20, 0, 20)
-        drag.Position = UDim2.new((getter() - min) / (max - min), -10, 0, -5)
-        drag.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-        drag.Text = ""
-        drag.Parent = frame
-        
-        local dragging = false
-        drag.MouseButton1Down:Connect(function()
-            dragging = true
-        end)
-        
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
-        end)
-        
-        frame:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-            if dragging then
-                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-                local sliderPos = slider.AbsolutePosition
-                local percent = (mousePos.X - sliderPos.X) / slider.AbsoluteSize.X
-                percent = math.clamp(percent, 0, 1)
-                local value = min + (max - min) * percent
-                setter(value)
-                fill.Size = UDim2.new(percent, 0, 1, 0)
-                drag.Position = UDim2.new(percent, -10, 0, -5)
-                label.Text = text .. ": " .. string.format(format or "%.1f", getter())
-            end
-        end)
-        
-        return frame
-    end
-    
-    -- Função para criar seletor de tecla
-    local function createKeybind(parent, text, yPos, getter, setter)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 30)
-        frame.Position = UDim2.new(0, 5, 0, yPos)
-        frame.BackgroundTransparency = 1
-        frame.Parent = parent
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.5, -5, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = frame
-        
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0.5, -5, 0, 25)
-        btn.Position = UDim2.new(0.5, 5, 0.5, -12.5)
-        btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-        btn.Text = getter().Name
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Parent = frame
-        
-        local listening = false
-        btn.MouseButton1Click:Connect(function()
-            listening = true
-            btn.Text = "Pressione uma tecla..."
-        end)
-        
-        UserInputService.InputBegan:Connect(function(input)
-            if listening and input.KeyCode ~= Enum.KeyCode.Unknown then
-                setter(input.KeyCode)
-                btn.Text = input.KeyCode.Name
-                listening = false
-            end
-        end)
-        
-        return frame
-    end
-    
-    -- Função para criar seletor de cor
-    local function createColorPicker(parent, text, yPos, getter, setter)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 30)
-        frame.Position = UDim2.new(0, 5, 0, yPos)
-        frame.BackgroundTransparency = 1
-        frame.Parent = parent
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.5, -5, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = frame
-        
-        local colorBtn = Instance.new("Frame")
-        colorBtn.Size = UDim2.new(0.2, -5, 0, 20)
-        colorBtn.Position = UDim2.new(0.5, 5, 0.5, -10)
-        colorBtn.BackgroundColor3 = getter()
-        colorBtn.BorderSizePixel = 0
-        colorBtn.Parent = frame
-        
-        colorBtn.MouseButton1Click:Connect(function()
-            -- Abrir seletor de cor (simplificado)
-            local colors = {
-                Color3.fromRGB(255, 0, 0),
-                Color3.fromRGB(0, 255, 0),
-                Color3.fromRGB(0, 0, 255),
-                Color3.fromRGB(255, 255, 0),
-                Color3.fromRGB(255, 0, 255),
-                Color3.fromRGB(0, 255, 255),
-                Color3.fromRGB(255, 255, 255),
-            }
-            local current = 1
-            for i, c in ipairs(colors) do
-                if c == getter() then
-                    current = i
-                    break
-                end
-            end
-            current = (current % #colors) + 1
-            setter(colors[current])
-            colorBtn.BackgroundColor3 = getter()
-        end)
-        
-        return frame
-    end
-    
-    -- Preencher aba AIMBOT
-    local yPos = 5
-    createCheckbox(aimTab, "Ativar AimBot", yPos, 
-        function() return Settings.AimEnabled end,
-        function(v) Settings.AimEnabled = v end)
-    yPos = yPos + 35
-    
-    createKeybind(aimTab, "Tecla do Aim", yPos,
-        function() return Settings.AimKey end,
-        function(v) Settings.AimKey = v end)
-    yPos = yPos + 35
-    
-    createSlider(aimTab, "FOV", yPos, 50, 500, 
-        function() return Settings.AimFOV end,
-        function(v) Settings.AimFOV = v end,
-        "%.0f")
-    yPos = yPos + 45
-    
-    createSlider(aimTab, "Suavidade", yPos, 1, 10,
-        function() return Settings.AimSmoothness end,
-        function(v) Settings.AimSmoothness = v end,
-        "%.1f")
-    yPos = yPos + 45
-    
-    createCheckbox(aimTab, "Mostrar Círculo FOV", yPos,
-        function() return Settings.ShowFOVCircle end,
-        function(v) Settings.ShowFOVCircle = v end)
-    yPos = yPos + 35
-    
-    -- Preencher aba ESP
-    yPos = 5
-    createCheckbox(espTab, "Ativar ESP", yPos,
-        function() return Settings.ESPEnabled end,
-        function(v) Settings.ESPEnabled = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Team Check", yPos,
-        function() return Settings.TeamCheck end,
-        function(v) Settings.TeamCheck = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Box", yPos,
-        function() return Settings.ShowBox end,
-        function(v) Settings.ShowBox = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Tracer", yPos,
-        function() return Settings.ShowTracer end,
-        function(v) Settings.ShowTracer = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Nome", yPos,
-        function() return Settings.ShowName end,
-        function(v) Settings.ShowName = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Vida", yPos,
-        function() return Settings.ShowHealth end,
-        function(v) Settings.ShowHealth = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Distância", yPos,
-        function() return Settings.ShowDistance end,
-        function(v) Settings.ShowDistance = v end)
-    yPos = yPos + 35
-    
-    createCheckbox(espTab, "Mostrar Ponto na Cabeça", yPos,
-        function() return Settings.ShowHeadDot end,
-        function(v) Settings.ShowHeadDot = v end)
-    yPos = yPos + 35
-    
-    createSlider(espTab, "Distância Máx", yPos, 100, 5000,
-        function() return Settings.MaxDistance end,
-        function(v) Settings.MaxDistance = v end,
-        "%.0f")
-    yPos = yPos + 45
-    
-    -- Preencher aba CORES
-    yPos = 5
-    createColorPicker(colorsTab, "Cor Inimigo", yPos,
-        function() return Settings.Colors.Enemy end,
-        function(v) Settings.Colors.Enemy = v end)
-    yPos = yPos + 35
-    
-    createColorPicker(colorsTab, "Cor Time", yPos,
-        function() return Settings.Colors.Team end,
-        function(v) Settings.Colors.Team = v end)
-    yPos = yPos + 35
-    
-    createColorPicker(colorsTab, "Cor Tracer", yPos,
-        function() return Settings.Colors.Tracer end,
-        function(v) Settings.Colors.Tracer = v end)
-    yPos = yPos + 35
-    
-    createColorPicker(colorsTab, "Cor Texto", yPos,
-        function() return Settings.Colors.Text end,
-        function(v) Settings.Colors.Text = v end)
-    yPos = yPos + 35
-    
-    createColorPicker(colorsTab, "Cor Outline", yPos,
-        function() return Settings.Colors.Outline end,
-        function(v) Settings.Colors.Outline = v end)
-    yPos = yPos + 35
-    
-    createColorPicker(colorsTab, "Cor Alvo Aim", yPos,
-        function() return Settings.Colors.AimTarget end,
-        function(v) Settings.Colors.AimTarget = v end)
-    yPos = yPos + 35
-end
-
--- Atalho para abrir/fechar HUD
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.Insert then
-        createHUD()
+userInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
     end
 end)
 
--- =====================================================
--- INICIALIZAÇÃO
--- =====================================================
-
-print("=== AIMBOT + ESP ULTIMATE CARREGADO ===")
-print("Pressione INSERT ou RIGHT SHIFT para abrir a HUD")
-print("Tecla padrão do Aim: E (configurável)")
+userInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
